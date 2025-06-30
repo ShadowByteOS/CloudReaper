@@ -1,0 +1,15 @@
+# Ignora i file di report generati
+report-*.txt
+report-*.json
+
+# Ignora i file di cache di Python
+__pycache__/
+*.pyc
+
+# Ignora i file di ambiente virtuale
+venv/
+.venv/
+
+# Ignora i file di sistema specifici di OS
+.DS_Store
+Thumbs.db
