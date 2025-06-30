@@ -16,13 +16,13 @@ from colorama import init, Fore, Style
 # Initialize Colorama
 init(autoreset=True)
 
-# --- Colors ---
+# Colors
 INFO = Fore.YELLOW + "[*] " + Style.RESET_ALL
 SUCCESS = Fore.GREEN + "[+] " + Style.RESET_ALL
 ERROR = Fore.RED + "[-] " + Style.RESET_ALL
 HEAD = Fore.CYAN + Style.BRIGHT
 
-# --- Animations & Graphics ---
+# Animations & Graphics
 def typewriter_effect(text, delay=0.02):
     # Nothing to see here, just some fancy text
     for char in text:
@@ -59,12 +59,46 @@ def print_banner():
     typewriter_effect(HEAD + banner_text)
     print(HEAD + "=" * len(banner_text))
 
-# --- API Keys (Optional) ---
-# Still looking? C'mon bro, just use the tool.
-SECURITYTRAILS_API_KEY = os.environ.get('SECURITYTRAILS_API_KEY')
-SHODAN_API_KEY = os.environ.get('SHODAN_API_KEY')
+# API Keys Management
+API_KEYS_FILE = 'keys.txt'
 
-# --- Global Variables ---
+def load_api_keys():
+    keys = {}
+    if os.path.exists(API_KEYS_FILE):
+        try:
+            with open(API_KEYS_FILE, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if '=' in line:
+                        key, value = line.split('=', 1)
+                        keys[key.strip()] = value.strip()
+        except Exception as e:
+            print(ERROR + f"Failed to read API keys from {API_KEYS_FILE}: {e}")
+    return keys
+
+def save_api_keys(shodan_key=None, securitytrails_key=None):
+    current_keys = load_api_keys()
+    updated = False
+
+    if shodan_key:
+        current_keys['SHODAN_API_KEY'] = shodan_key
+        updated = True
+    if securitytrails_key:
+        current_keys['SECURITYTRAILS_API_KEY'] = securitytrails_key
+        updated = True
+
+    if updated:
+        try:
+            with open(API_KEYS_FILE, 'w') as f:
+                for key, value in current_keys.items():
+                    f.write(f"{key}={value}\n")
+            print(SUCCESS + f"API keys saved to {API_KEYS_FILE}")
+        except Exception as e:
+            print(ERROR + f"Failed to save API keys to {API_KEYS_FILE}: {e}")
+
+# Global Variables
+SHODAN_API_KEY = None
+SECURITYTRAILS_API_KEY = None
 found_ips = []
 cloudflare_ips = set()
 USER_AGENTS = [
@@ -73,7 +107,7 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
 ]
 
-# --- Core Functions ---
+# Core Functions
 
 def get_cloudflare_ips():
     print(INFO + "Fetching Cloudflare's IP ranges...")
@@ -145,18 +179,75 @@ def enrich_ip_data(item, domain, stealth_mode):
     item['reverse_dns'] = get_reverse_dns(ip)
     return item
 
-def generate_report(domain, final_data, args):
+def shodan_lookup(ip):
+    if not SHODAN_API_KEY:
+        return None
+    print(INFO + f"Performing Shodan lookup for {ip}...")
+    try:
+        # Placeholder for actual Shodan API call
+        # Example: https://api.shodan.io/shodan/host/{ip}?key={SHODAN_API_KEY}
+        response = requests.get(f"https://api.shodan.io/shodan/host/{ip}?key={SHODAN_API_KEY}", timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        # Extract relevant Shodan data
+        return {"shodan_data": data.get("data", [])} # Simplified for example
+    except requests.RequestException as e:
+        print(ERROR + f"Shodan lookup failed for {ip}: {e}")
+        return None
+
+def securitytrails_lookup(domain):
+    if not SECURITYTRAILS_API_KEY:
+        return None
+    print(INFO + f"Performing SecurityTrails lookup for {domain}...")
+    try:
+        # Placeholder for actual SecurityTrails API call
+        # Example: https://api.securitytrails.com/v1/domain/{domain}?apikey={SECURITYTRAILS_API_KEY}
+        headers = {"APIKEY": SECURITYTRAILS_API_KEY}
+        response = requests.get(f"https://api.securitytrails.com/v1/domain/{domain}", headers=headers, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        # Extract relevant SecurityTrails data
+        return {"securitytrails_data": data.get("current_dns", {})} # Simplified for example
+    except requests.RequestException as e:
+        print(ERROR + f"SecurityTrails lookup failed for {domain}: {e}")
+        return None
+
+def generate_report(domain, final_data, args, shodan_results, securitytrails_results):
     output_file = args.output if args.output else f"report-{domain}.txt"
     
+    report_data = {
+        "domain": domain,
+        "found_ips": final_data,
+        "shodan_results": shodan_results,
+        "securitytrails_results": securitytrails_results
+    }
+
     if args.json:
         json_output_file = (args.output or f"report-{domain}") + ".json"
         with open(json_output_file, 'w', encoding='utf-8') as f:
-            json.dump(final_data, f, indent=4)
+            json.dump(report_data, f, indent=4)
         print(SUCCESS + f"JSON report saved to: {json_output_file}")
 
     report_content_plain = f"CloudReaper 2.0 - Final Report for: {domain}\n" + "="*60 + "\n\n"
     
     print("\n" + HEAD + f"--- CloudReaper 2.0 Final Report for {domain} ---")
+    report_content_plain += f"CloudReaper 2.0 - Final Report for: {domain}\n" + "="*60 + "\n\n"
+
+    if shodan_results:
+        print(INFO + "\n--- Shodan Results ---")
+        report_content_plain += "\n--- Shodan Results ---\n"
+        # Add more detailed Shodan data printing here if needed
+        report_content_plain += json.dumps(shodan_results, indent=2) + "\n"
+
+    if securitytrails_results:
+        print(INFO + "\n--- SecurityTrails Results ---")
+        report_content_plain += "\n--- SecurityTrails Results ---\n"
+        # Add more detailed SecurityTrails data printing here if needed
+        report_content_plain += json.dumps(securitytrails_results, indent=2) + "\n"
+
+    print(INFO + "\n--- Discovered Non-Cloudflare IPs ---")
+    report_content_plain += "\n--- Discovered Non-Cloudflare IPs ---\n"
+
     for item in final_data:
         print(SUCCESS + "IP Address: " + Fore.GREEN + Style.BRIGHT + item['ip'])
         report_content_plain += f"[+] IP Address: {item['ip']}\n"
@@ -194,7 +285,7 @@ def get_default_wordlist():
     ]
 
 def main():
-    global cloudflare_ips, found_ips
+    global cloudflare_ips, found_ips, SHODAN_API_KEY, SECURITYTRAILS_API_KEY
     requests.packages.urllib3.disable_warnings(requests.packages.urllib3.exceptions.InsecureRequestWarning)
     print_banner()
 
@@ -203,13 +294,15 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter,
         epilog="""
 API Key Setup (Optional):
-Set the following environment variables for enhanced functionality:
-  - SECURITYTRAILS_API_KEY: Your key from securitytrails.com
-  - SHODAN_API_KEY:         Your key from shodan.io
+Keys are loaded in this order of priority:
+1. Command-line arguments (--shodan-key, --securitytrails-key)
+2. 'keys.txt' file in the script directory
+3. Environment variables (SHODAN_API_KEY, SECURITYTRAILS_API_KEY)
+
+If keys are provided via command-line, they will be automatically saved to 'keys.txt' for future use.
 
 Example:
-  export SECURITYTRAILS_API_KEY="your_key_here"
-  python CloudReaper.py -d example.com
+  python CloudReaper.py -d example.com --shodan-key your_shodan_key
 """
     )
     parser.add_argument("-d", "--domain", required=True, help="Target domain")
@@ -218,7 +311,38 @@ Example:
     parser.add_argument("-t", "--threads", type=int, default=50, help="Number of threads for parallel tasks")
     parser.add_argument("--stealth", action="store_true", help="Enable stealth-like features (random delays, user-agents)")
     parser.add_argument("--json", action="store_true", help="Enable JSON output")
+    parser.add_argument("--shodan-key", help="Your Shodan API key")
+    parser.add_argument("--securitytrails-key", help="Your SecurityTrails API key")
     args = parser.parse_args()
+
+    # Load API keys
+    cli_shodan_key = args.shodan_key
+    cli_securitytrails_key = args.securitytrails_key
+
+    file_keys = load_api_keys()
+    env_shodan_key = os.environ.get('SHODAN_API_KEY')
+    env_securitytrails_key = os.environ.get('SECURITYTRAILS_API_KEY')
+
+    SHODAN_API_KEY = cli_shodan_key or file_keys.get('SHODAN_API_KEY') or env_shodan_key
+    SECURITYTRAILS_API_KEY = cli_securitytrails_key or file_keys.get('SECURITYTRAILS_API_KEY') or env_securitytrails_key
+
+    if cli_shodan_key or cli_securitytrails_key:
+        save_api_keys(shodan_key=cli_shodan_key, securitytrails_key=cli_securitytrails_key)
+
+    if not SHODAN_API_KEY:
+        print(INFO + "Shodan API key not found. Shodan features will be skipped.")
+    if not SECURITYTRAILS_API_KEY:
+        print(INFO + "SecurityTrails API key not found. SecurityTrails features will be skipped.")
+
+    # Perform API lookups if keys are available
+    shodan_results = None
+    securitytrails_results = None
+
+    if SHODAN_API_KEY:
+        shodan_results = shodan_lookup(args.domain) # Assuming Shodan lookup is for the domain's IP
+
+    if SECURITYTRAILS_API_KEY:
+        securitytrails_results = securitytrails_lookup(args.domain)
 
     # Phase 1: IP Discovery
     cloudflare_ips = get_cloudflare_ips()
@@ -257,7 +381,7 @@ Example:
     print(SUCCESS + "Data enrichment completed.")
 
     # Phase 3: Report Generation
-    generate_report(args.domain, final_data, args)
+    generate_report(args.domain, final_data, args, shodan_results, securitytrails_results)
 
 if __name__ == "__main__":
     try:
