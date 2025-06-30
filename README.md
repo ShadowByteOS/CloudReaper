@@ -1,6 +1,6 @@
 # CloudReaper 2.0
 
-![CloudReaper Banner](https://raw.githubusercontent.com/ShadowByteOS/CloudReaper/main/banner.png)
+![banner](https://github.com/user-attachments/assets/5a2be6eb-5eba-47ce-bb44-08d62fdf976e)
 
 A powerful Python OSINT (Open Source INTelligence) tool designed to uncover the real IP addresses behind Cloudflare-protected websites. CloudReaper employs a combination of advanced techniques to bypass Cloudflare's protections and reveal the underlying infrastructure.
 
