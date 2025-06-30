@@ -94,4 +94,6 @@ export SHODAN_API_KEY="YOUR_SHODAN_API_KEY"
 
 Contributions are welcome! If you have ideas to improve CloudReaper, feel free to open an issue or submit a pull request.
 
-don pollo.
+## License
+
+This project is released under the MIT License. See the LICENSE file for more details.
